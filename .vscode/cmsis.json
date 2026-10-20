@@ -1,0 +1,9 @@
+{
+    "targetSet": {
+        "zephyr": {
+            "activeTargetType": "DevKit-E8"
+        }
+    },
+    "activeSolution": "../zephyr.csolution.yml",
+    "activeTarget": "DevKit-E8"
+}

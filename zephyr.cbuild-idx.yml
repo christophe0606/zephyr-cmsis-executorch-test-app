@@ -1,0 +1,16 @@
+build-idx:
+  generated-by: csolution version 2.15.1+p3-gf46d68bf
+  target: DevKit-E8
+  csolution: zephyr.csolution.yml
+  cbuild-run: out/zephyr+DevKit-E8.cbuild-run.yml
+  tmpdir: tmp/DevKit-E8/default
+  cbuilds:
+    - cbuild: out/Zephyr_app/DevKit-E8/Debug/Zephyr_app.Debug+DevKit-E8.cbuild.yml
+      west: true
+      project: Zephyr_app
+      configuration: .Debug+DevKit-E8
+      messages:
+        info:
+          - zephyr.cbuild-pack.yml - file is already up-to-date
+          - zephyr+DevKit-E8.cbuild-run.yml - file generated successfully
+          - Zephyr_app.Debug+DevKit-E8.cbuild.yml - file is already up-to-date

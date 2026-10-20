@@ -1,0 +1,13 @@
+{
+    "cmsis-csolution.environmentVariables": {
+        "ZEPHYR_BASE": "$HOME/benchresults/zephyr-repo/zephyr",
+        "VIRTUAL_ENV": "$HOME/benchresults/zephyr-repo/.venv/Scripts",
+        "PATH":"$HOME/benchresults/zephyr-repo/.venv/Scripts"
+    },
+    "debug.hideSlowPreLaunchWarning": true,
+    "debug.showInStatusBar": "never",
+    "memory-inspector.addressPadding": "32bit",
+    "memory-inspector.groupings.groupsPerRow": "Autofit",
+    "memory-inspector.groupings.MAUsPerGroup": 4,
+    "memory-inspector.scrollingBehavior": "Auto-Append"
+}
