@@ -44,9 +44,12 @@ declares these application dependencies without modifying `zephyr/west.yml`:
   `third-party/flatbuffers` submodule is requested; the other upstream
   submodules are not needed for this firmware integration.
 - `cmsis-executorch`, pinned to commit
-  `3f4f09f8567a204cd5727e12a5f4bdb7fe941d18` from the `zephyr` branch of
+  `20cfb8378ff5b46591691af9b60e3055e59e2f4d` from the `zephyr` branch of
   `git@github.com:christophe0606/CMSIS-Executorch.git`, at
   `modules/lib/cmsis-executorch`. Fetching this module uses GitHub SSH access.
+  Its manifest entry also declares `west-commands: zephyr/west-commands.yml`
+  to register `west ailayer`. This requires a checkout containing that command
+  descriptor; adding the field alone does not update a pinned checkout.
 
 For another application using this runtime, keep both entries in the shared
 manifest. For additional dependencies, add a `projects` entry with its unique
@@ -96,10 +99,34 @@ new module instead of all enabled projects:
 .\.venv\Scripts\west.exe update -n cmsis-executorch
 ```
 
+When updating the CMSIS-ExecuTorch fork, commit and push the changes first,
+then change its `revision` in `applications/west.yml` to the new commit SHA
+and update the pin documented here. Run the targeted update above afterward;
+`west update` follows the manifest's pinned revision, not the latest branch tip.
+
 If the upstream ExecuTorch checkout is also missing, include it explicitly:
 
 ```powershell
 .\.venv\Scripts\west.exe update -n executorch cmsis-executorch
+```
+
+After updating the module, check command discovery with `uv run west ailayer --help`.
+Before creating or regenerating this application's `ai_layer/`, install the
+required Python packages. Run the setup command from `applications/my_app`:
+
+```powershell
+uv run ..\..\modules\lib\cmsis-executorch\setup_venv.py --uv
+```
+
+This installs the dependencies needed to quantize networks, export ExecuTorch
+models, and compile them for the Ethos-U NPU with Vela. The `--uv` option uses
+uv's environment discovery, including parent directories, so it can reuse the
+workspace's `.venv`. Run setup again when the module's Python requirements change.
+
+Then, from the same application directory, generate the AI layer:
+
+```powershell
+uv run west ailayer zephyr.cbuild-mlops.yml
 ```
 
 For the first build after moving the module, select a pristine rebuild so an
