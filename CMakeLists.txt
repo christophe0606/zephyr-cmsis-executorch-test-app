@@ -7,7 +7,8 @@ list(APPEND EXTRA_ZEPHYR_MODULES
   "${CMAKE_CURRENT_SOURCE_DIR}/../../../CMSIS-Executorch"
 )
 
-list(APPEND EXTRA_CONF_FILE "${CMAKE_CURRENT_SOURCE_DIR}/operators.conf")
+# The AI layer adds its Kconfig fragments before Zephyr processes configuration.
+add_subdirectory(ai_layer)
 
 # Include the NPU node even when an older build cache has an empty overlay list.
 if(NOT DTC_OVERLAY_FILE)
@@ -20,11 +21,4 @@ project(my_app)
 target_sources(app PRIVATE
   src/main.c
   src/executorch_test.cpp
-  src/model_pte.c
-  # The local module supplies the runtime/operators; this model also delegates
-  # to the upstream Ethos-U backend through Zephyr's initialized core driver.
-  "${ZEPHYR_EXECUTORCH_MODULE_DIR}/backends/arm/runtime/EthosUBackend.cpp"
-  "${ZEPHYR_EXECUTORCH_MODULE_DIR}/backends/arm/runtime/EthosUBackend_Cortex_M.cpp"
-  "${ZEPHYR_EXECUTORCH_MODULE_DIR}/backends/arm/runtime/EthosUBackend_IoMemcpy.cpp"
-  "${ZEPHYR_EXECUTORCH_MODULE_DIR}/backends/arm/runtime/VelaBinStream.cpp"
 )

@@ -11,7 +11,7 @@ and custom DMA setting, then releases the driver before calling
 `executorch_run_test()` through its C interface.
 
 `src/executorch_test.cpp` adapts the original CMSIS-Executorch `app_main.cpp`:
-it loads the model embedded in `src/model_pte.c` with `EmbeddedModule`, supplies
+it loads the model embedded in `ai_layer/model_pte.c` with `EmbeddedModule`, supplies
 the same deterministic 16x16 RGB float ramp, and runs `forward()`. Input shape
 and dimension order come from the model metadata: this PTE exposes NCHW
 `[1, 3, 16, 16]`, while the original CMSIS runner hard-codes NHWC.
@@ -36,17 +36,25 @@ west build, run this from the west workspace root (`zephyr-repo`):
 `executorch` checkout is supplied by west. The local module path is relative
 to this application and also applies when building through the CMSIS solution.
 
-`prj.conf` enables C++17 and `CONFIG_CMSIS_EXECUTORCH=y`, keeps
-`CONFIG_EXECUTORCH=n`. `operators.conf` selects the quantize/dequantize operator
-families and is merged with `prj.conf` through `EXTRA_CONF_FILE`, set in
-`CMakeLists.txt` before `find_package(Zephyr)`.
+`prj.conf` enables C++17 and the board's Ethos-U driver. The AI layer owns the
+ExecuTorch selections: `ai_layer/components.conf` enables the CMSIS module,
+disables the upstream runtime build, and selects Runtime, Kernel Utils, Kernel
+Registration, and Backend EthosU. It also sets
+`CONFIG_CMSIS_EXECUTORCH_LOG_ENABLED=n`, equivalent to the original CMSIS AI
+layer's `ET_LOG_ENABLED: 0`. Set it to `y` to enable ExecuTorch diagnostics;
+Zephyr and Ethos-U driver logging have their own application settings.
+`ai_layer/operators.conf` selects the quantize/dequantize operator families.
+Both fragments are merged with `prj.conf` through `EXTRA_CONF_FILE`, set by
+`ai_layer/CMakeLists.txt` before `find_package(Zephyr)`.
 The local module uses upstream ExecuTorch sources with its own build rules.
 Its generated files require ExecuTorch 1.5.1 and the pinned FlatBuffers headers.
 
-The application compiles `src/model_pte.c`, the C++ runner, and upstream
-`EthosUBackend.cpp`, `EthosUBackend_Cortex_M.cpp`, `EthosUBackend_IoMemcpy.cpp`,
-and `VelaBinStream.cpp`. Backend registration is retained in Zephyr's application
-library. No upstream host tools or code generators run during the firmware build.
+The application compiles `ai_layer/model_pte.c` and the C++ runner. The module
+compiles the selected runtime, utilities, operator registration, CPU operators,
+and the four Ethos-U backend sources. Zephyr's module library retains the
+backend registration constructor; no backend source paths are needed in the
+application CMake. No upstream host tools or code generators run during the
+firmware build.
 
 The method allocator has a 128 KiB pool in the default RAM. The temporary
 allocator has a 64 KiB pool in the devicetree's `SRAM0` section so NPU scratch
@@ -54,7 +62,7 @@ uses system SRAM instead of CPU-local DTCM. That NOLOAD pool is explicitly
 cleared by the runner. `prj.conf` provides a 16 KiB main stack and kernel heap,
 cache maintenance for the Ethos-U driver, and floating-point printf support.
 
-The supplied `src/model.pte` targets `ethos-u85-256`; `src/model_pte.c` has been
+The supplied `ai_layer/model.pte` targets `ethos-u85-256`; `ai_layer/model_pte.c` has been
 refreshed from that binary (the previous C array contained a U55-128 model).
 When replacing the model, refresh its C array and operator selections together.
 The replacement must accept one rank-four input with 768 floats and return one
@@ -62,6 +70,38 @@ tensor with ten floats, or the runner must be adapted to its interface.
 
 See the module's [integration guide](../../../CMSIS-Executorch/documentation/zephyr-module.md)
 for operator selection and the runtime API.
+
+## Reusing the AI layer
+
+The `ai_layer` directory contains `CMakeLists.txt`, `components.conf`,
+`operators.conf`, `model.pte`, and its embedded C array/header
+(`model_pte.c` / `model_pte.h`). An enclosing
+Zephyr application integrates these files with one call **before** Zephyr setup:
+
+```cmake
+cmake_minimum_required(VERSION 3.20.0)
+# Register any local Zephyr modules here, as in this application's CMakeLists.
+add_subdirectory(ai_layer)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+project(my_app)
+target_sources(app PRIVATE src/main.c)
+```
+
+The layer appends its absolute `components.conf` and `operators.conf` paths to
+the existing `EXTRA_CONF_FILE` list and propagates it to the parent. It also supplies its model
+sources and header directory through the `ai_layer` interface target, linked to
+`app` automatically at the end of the enclosing `CMakeLists.txt`. No additional
+`target_sources()`, include path, or link command is needed for the models.
+The layer selects the CMSIS-ExecuTorch runtime and its backend. The enclosing
+project registers the Zephyr modules and provides C++17 support, the inference
+runner, and board-specific driver, devicetree and memory settings.
+
+For future generated layers with several models, list each embedded C source in
+`ai_layer/CMakeLists.txt`, use unique symbols and headers for each model, and put
+the union of their required shared components/backends in
+`ai_layer/components.conf` and operators in `ai_layer/operators.conf`. The `.pte`
+files accompany the generated arrays; they are not themselves CMake sources.
+The enclosing application's `add_subdirectory(ai_layer)` call stays the same.
 
 ## Running
 
