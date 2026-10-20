@@ -22,6 +22,8 @@ smoke test; it does not compare the logits against a numerical reference.
 
 ## Building
 
+Populate the workspace dependencies as described below before building.
+
 In VS Code, select the `DevKit-E8` target and build the CMSIS solution. For a direct
 west build, run this from the west workspace root (`zephyr-repo`):
 
@@ -29,12 +31,87 @@ west build, run this from the west workspace root (`zephyr-repo`):
 .\.venv\Scripts\west.exe build -b ensemble_e8_dk/ae822fa0e5597ls0/rtss_hp -d build/my_app applications/my_app
 ```
 
-## Local CMSIS-ExecuTorch module
+## Shared west manifest and dependencies
 
-`CMakeLists.txt` registers `../../../CMSIS-Executorch` with
-`EXTRA_ZEPHYR_MODULES` before `find_package(Zephyr)`. The installed upstream
-`executorch` checkout is supplied by west. The local module path is relative
-to this application and also applies when building through the CMSIS solution.
+[`../west.yml`](../west.yml), at `zephyr-repo/applications/west.yml`, is the
+root manifest for the whole workspace, including every application under
+`applications/`. It imports the module definitions from Zephyr v4.4.0 and
+declares these application dependencies without modifying `zephyr/west.yml`:
+
+- `executorch`, pinned to the existing commit
+  `3b60683923245cf472b7323426920e15623ba361` (reports version 1.5.1) at
+  `modules/lib/executorch`. Only its
+  `third-party/flatbuffers` submodule is requested; the other upstream
+  submodules are not needed for this firmware integration.
+- `cmsis-executorch`, pinned to commit
+  `3f4f09f8567a204cd5727e12a5f4bdb7fe941d18` from the `zephyr` branch of
+  `git@github.com:christophe0606/CMSIS-Executorch.git`, at
+  `modules/lib/cmsis-executorch`. Fetching this module uses GitHub SSH access.
+
+For another application using this runtime, keep both entries in the shared
+manifest. For additional dependencies, add a `projects` entry with its unique
+`name`, repository `url`, pinned `revision`, and workspace-relative `path`.
+Also enable that exact project name in `.west/config`'s
+`manifest.project-filter`. Adding a project to the manifest alone does not
+enable it with this workspace's filter.
+
+The workspace configuration selects the shared manifest and limits updates to
+the explicitly enabled projects:
+
+```ini
+[manifest]
+path = applications
+file = west.yml
+project-filter = -.*,+zephyr,+cmsis,+cmsis_6,+hal_ethos_u,+hal_alif,+executorch,+cmsis-executorch
+```
+
+`hal_alif` is retained in the filter for compatibility with the existing
+configuration; the pinned Zephyr manifest currently declares no project with
+that name. A filter entry does not create or download a project on its own.
+
+After changing the manifest or setting up this layout, run the following from
+`zephyr-repo` (the workspace root):
+
+```powershell
+.\.venv\Scripts\west.exe update -n
+```
+
+This is required to install `cmsis-executorch` in its new workspace location.
+The previous sibling checkout at `../CMSIS-Executorch` is no longer registered
+by the application. The shared manifest's module metadata makes west-managed
+modules discoverable by Zephyr without an `EXTRA_ZEPHYR_MODULES` entry in the
+application's CMake file.
+
+The project filter controls which repositories are updated. `-n` (`--narrow`)
+reduces fetching to the requested revision and avoids fetching all tags; it
+does not select fewer projects. West's default smart fetching reuses pinned
+tags and commits already present locally. The three projects declared directly
+in this manifest also use `clone-depth: 1` to limit history fetched when needed.
+These settings do not remove submodules or history that were downloaded earlier.
+
+Once the Zephyr manifest import has been initialized, you can update only the
+new module instead of all enabled projects:
+
+```powershell
+.\.venv\Scripts\west.exe update -n cmsis-executorch
+```
+
+If the upstream ExecuTorch checkout is also missing, include it explicitly:
+
+```powershell
+.\.venv\Scripts\west.exe update -n executorch cmsis-executorch
+```
+
+For the first build after moving the module, select a pristine rebuild so an
+old CMake cache cannot retain the sibling module path. With the CMSIS solution,
+use its clean/rebuild operation; for a direct west build use `west build -p always`
+with the board, build-directory and application arguments shown above.
+
+See [west update](https://docs.zephyrproject.org/latest/develop/west/built-in.html#west-update)
+and [manifest imports](https://docs.zephyrproject.org/latest/develop/west/manifest.html#manifest-imports)
+for the update and dependency-resolution behavior.
+
+## CMSIS-ExecuTorch module configuration
 
 `prj.conf` enables C++17 and the board's Ethos-U driver. The AI layer owns the
 ExecuTorch selections: `ai_layer/components.conf` enables the CMSIS module,
@@ -46,7 +123,7 @@ Zephyr and Ethos-U driver logging have their own application settings.
 `ai_layer/operators.conf` selects the quantize/dequantize operator families.
 Both fragments are merged with `prj.conf` through `EXTRA_CONF_FILE`, set by
 `ai_layer/CMakeLists.txt` before `find_package(Zephyr)`.
-The local module uses upstream ExecuTorch sources with its own build rules.
+The CMSIS module uses upstream ExecuTorch sources with its own build rules.
 Its generated files require ExecuTorch 1.5.1 and the pinned FlatBuffers headers.
 
 The application compiles `ai_layer/model_pte.c` and the C++ runner. The module
@@ -68,7 +145,7 @@ When replacing the model, refresh its C array and operator selections together.
 The replacement must accept one rank-four input with 768 floats and return one
 tensor with ten floats, or the runner must be adapted to its interface.
 
-See the module's [integration guide](../../../CMSIS-Executorch/documentation/zephyr-module.md)
+See the module's [integration guide](../../modules/lib/cmsis-executorch/documentation/zephyr-module.md)
 for operator selection and the runtime API.
 
 ## Reusing the AI layer
@@ -80,7 +157,7 @@ Zephyr application integrates these files with one call **before** Zephyr setup:
 
 ```cmake
 cmake_minimum_required(VERSION 3.20.0)
-# Register any local Zephyr modules here, as in this application's CMakeLists.
+# Install the runtime dependencies through the shared west manifest first.
 add_subdirectory(ai_layer)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(my_app)
@@ -93,7 +170,7 @@ sources and header directory through the `ai_layer` interface target, linked to
 `app` automatically at the end of the enclosing `CMakeLists.txt`. No additional
 `target_sources()`, include path, or link command is needed for the models.
 The layer selects the CMSIS-ExecuTorch runtime and its backend. The enclosing
-project registers the Zephyr modules and provides C++17 support, the inference
+project obtains the Zephyr modules through the shared manifest and provides C++17 support, the inference
 runner, and board-specific driver, devicetree and memory settings.
 
 For future generated layers with several models, list each embedded C source in

@@ -2,11 +2,6 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
-# Local CMSIS-ExecuTorch module; west supplies the upstream source dependency.
-list(APPEND EXTRA_ZEPHYR_MODULES
-  "${CMAKE_CURRENT_SOURCE_DIR}/../../../CMSIS-Executorch"
-)
-
 # The AI layer adds its Kconfig fragments before Zephyr processes configuration.
 add_subdirectory(ai_layer)
 
