@@ -13,6 +13,8 @@
 
 #include <ethosu_driver.h>
 
+#include "executorch_test.h"
+
 #define NPU_NODE DT_NODELABEL(ethosu0)
 
 int main(void)
@@ -72,6 +74,7 @@ int main(void)
 	ethosu_release_driver(drv);
 	if (ret == 0) {
 		printf("Ethos-U85 driver communication OK (ID/configuration read; no inference).\n");
+		return executorch_run_test();
 	}
 
 	return ret;

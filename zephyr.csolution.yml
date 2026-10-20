@@ -20,6 +20,9 @@ solution:
             port: 3333
             protocol: swd
             clock: 10000000
+            load-setup:
+              # Avoid resuming the flash algorithm before a debugger pin reset.
+              post-reset: system
           images:
             - project-context: Zephyr_app.Debug
 
