@@ -43,5 +43,7 @@ solution:
         project-id: Zephyr_app
         app-path: .
         board: $west-board$
+        west-defs:
+          - DTC_OVERLAY_FILE: app.overlay
   compiler: GCC
   created-for: CMSIS-Toolbox@2.14.1
