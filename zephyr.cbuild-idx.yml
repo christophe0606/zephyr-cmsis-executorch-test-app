@@ -13,4 +13,5 @@ build-idx:
         info:
           - zephyr.cbuild-pack.yml - file is already up-to-date
           - zephyr+DevKit-E8.cbuild-run.yml - file generated successfully
+          - zephyr.cbuild-mlops.yml - file is already up-to-date
           - Zephyr_app.Debug+DevKit-E8.cbuild.yml - file is already up-to-date

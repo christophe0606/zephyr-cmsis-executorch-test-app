@@ -1,0 +1,17 @@
+cbuild-mlops:
+  generated-by: csolution version 2.15.1+p3-gf46d68bf
+  description: Ethos-U85 network demos and benchmarks for Alif DevKit-E8
+  processor:
+    type: Cortex-M55
+  npu:
+    type: Ethos-U85
+    macs: 256
+  vela:
+    ini: .cmsis/ensemble_vela.ini
+    options: --accelerator-config ethos-u85-256 --system-config RTSS_HP_SRAM_MRAM --memory-mode Shared_Sram
+  hardware:
+    active: DevKit-E8
+    cbuild-run: out/zephyr+DevKit-E8.cbuild-run.yml
+    output:
+      - file: out/Zephyr_app/DevKit-E8/Debug/zephyr/zephyr.elf
+        type: elf
