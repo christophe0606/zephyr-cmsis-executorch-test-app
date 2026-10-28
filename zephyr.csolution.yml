@@ -48,6 +48,7 @@ solution:
         board: $west-board$
         west-defs:
           - DTC_OVERLAY_FILE: app.overlay
+          - EXTRA_ZEPHYR_MODULES: ${SOLUTION_ROOT}/../../../executorch_matthias/pack-output/PyTorch.ExecuTorch.1.6.0
 
   mlops:
     description: Ethos-U85 network demos and benchmarks for Alif DevKit-E8

@@ -52,8 +52,9 @@ Open the manifest file from `zephyr-repo`:
 nano applications/west.yml
 ~~~
 
-Paste this complete manifest and save it. It imports Zephyr's module list and
-adds ExecuTorch and the CMSIS-ExecuTorch module that provides `west ailayer`.
+Paste this complete manifest and save it. It imports Zephyr's module list,
+excluding upstream ExecuTorch. CMSIS-ExecuTorch comes from an external pack
+configured in the application's csolution, rather than from `west`.
 
 ~~~yaml
 manifest:
@@ -66,32 +67,18 @@ manifest:
       revision: v4.4.0
       path: zephyr
       clone-depth: 1
-      import: true
-
-    - name: executorch
-      url: https://github.com/pytorch/executorch
-      revision: 3b60683923245cf472b7323426920e15623ba361
-      path: modules/lib/executorch
-      clone-depth: 1
-      submodules:
-        - path: third-party/flatbuffers
-
-    - name: cmsis-executorch
-      url: https://github.com/christophe0606/CMSIS-Executorch.git
-      revision: 20cfb8378ff5b46591691af9b60e3055e59e2f4d
-      path: modules/lib/cmsis-executorch
-      clone-depth: 1
-      west-commands: zephyr/west-commands.yml
+      import:
+        name-blocklist:
+          - executorch
 ~~~
 
-These commit pins match this application and keep the workspace
-reproducible. For the full-history variant, delete all three
-`clone-depth: 1` lines before saving the file.
+The Zephyr release matches this application. For the full-history variant,
+delete its `clone-depth: 1` line before saving the file.
 
 ### Step 4: Create one root Python environment and install `west`
 
-Choose **one** option. `Python 3.12` supports the pinned ExecuTorch export
-requirements. Stay in `zephyr-repo`.
+Choose **one** option and stay in `zephyr-repo`. Building the existing AI layer
+does not require installing model export packages.
 
 With `uv`:
 
@@ -119,15 +106,13 @@ from the workspace root:
 uv run west update -n -o=--depth=1
 ~~~
 
-Use `uv run west ailayer zephyr.cbuild-mlops.yml` from
-`applications/my_app` when generating the AI layer in section 3. The full
-`.venv/bin/west` paths below work with either environment setup method.
+The full `.venv/bin/west` paths below work with either environment setup method.
 
 ### Step 5: Set `applications/west.yml` as the manifest and update
 
 ~~~bash
 .venv/bin/west init -l applications
-.venv/bin/west config manifest.project-filter -- '-.*,+zephyr,+cmsis,+cmsis_6,+hal_ethos_u,+hal_alif,+executorch,+cmsis-executorch'
+.venv/bin/west config manifest.project-filter -- '-.*,+zephyr,+cmsis,+cmsis_6,+hal_ethos_u,+hal_alif'
 .venv/bin/west update -n -o=--depth=1
 ~~~
 
@@ -141,8 +126,7 @@ For `west update`, `-n` (`--narrow`) fetches just the requested revisions and
 omits tags. `-o=--depth=1` asks `Git` for shallow fetches of imported projects
 that lack `clone-depth`. The project filter
 limits **which repositories** are downloaded; these options limit `Git`
-history. The ExecuTorch entry also limits submodules to
-`third-party/flatbuffers`. See the [`west update` options](https://docs.zephyrproject.org/latest/develop/west/built-in.html#west-update)
+history. See the [`west update` options](https://docs.zephyrproject.org/latest/develop/west/built-in.html#west-update)
 and [project-filter configuration](https://docs.zephyrproject.org/latest/develop/west/config.html#manifest-project-filter).
 
 For the full-history variant, use this update command instead:
@@ -167,27 +151,23 @@ environment are now configured. If another application needs a
 different module, add its project name to the filter and run `west update`
 again.
 
-## 2. Install the CMSIS-ExecuTorch Python packages
+## 2. Use the external CMSIS-ExecuTorch pack
 
-After `cmsis-executorch` is cloned, run its setup script at
-`modules/lib/cmsis-executorch/setup_venv.py`. Run it from the **workspace root**
-so it reuses the `.venv` made for `west`. The script installs the `PyTorch`,
-`ExecuTorch`, Arm export, and `Vela` packages needed by `west ailayer`.
+This application uses the self-contained Zephyr module in:
 
-If step 4 used `uv`, have the script install through `uv`:
-
-~~~bash
-.venv/bin/python modules/lib/cmsis-executorch/setup_venv.py --uv
+~~~text
+C:/Users/chrfav01/benchresults/executorch_matthias/pack-output/PyTorch.ExecuTorch.1.6.0
 ~~~
 
-If step 4 used `Python`'s `venv`, have it install through `pip`:
+The pack supplies `zephyr/module.yml` with the module name `cmsis-executorch`,
+plus the runtime, operators, headers, and FlatBuffers headers. Neither
+`executorch` nor `cmsis-executorch` is a west project. Existing checkouts in
+`modules/lib` are not used by this application.
 
-~~~bash
-.venv/bin/python modules/lib/cmsis-executorch/setup_venv.py
-~~~
-
-Both commands use the same root `.venv`. Run the matching command again when
-the module's Python requirements change.
+Set the pack root through `EXTRA_ZEPHYR_MODULES` in
+[`zephyr.csolution.yml`](zephyr.csolution.yml), as shown below. Adjust that
+path if the pack is moved. No separate ExecuTorch checkout or Python export
+setup is needed to build the existing model.
 
 ## 3. Configure the CMSIS solution for `west`
 
@@ -221,9 +201,12 @@ solution:
         board: $west-board$
         west-defs:
           - DTC_OVERLAY_FILE: app.overlay
+          - EXTRA_ZEPHYR_MODULES: ${SOLUTION_ROOT}/../../../executorch_matthias/pack-output/PyTorch.ExecuTorch.1.6.0
 ~~~
 
 `west-defs` passes these `Kconfig` and `CMake` values into the `west` build.
+`${SOLUTION_ROOT}` resolves the pack path in the generated CMake and avoids a
+literal Windows drive colon, which the `west-defs` schema does not accept.
 `project-id` also identifies the image context in the target set. Keep the
 checked-in solution's pack, debugger, image, MLOps, and compiler entries for
 this Alif E8 example.
@@ -248,21 +231,10 @@ select `DevKit-E8`, and run solution setup. Setup produces
 `zephyr.cbuild-mlops.yml` from the solution's `mlops` settings. The checked-in
 file shows the expected format; setup refreshes it for your installed tools.
 
-Once `zephyr.cbuild-mlops.yml` exists, create or update the AI layer. From the
-workspace root, run:
-
-~~~bash
-cd applications/my_app
-../../.venv/bin/west ailayer zephyr.cbuild-mlops.yml
-~~~
-
-`west ailayer` exports the model and writes `ai_layer` beside the MLOps file:
-the model binary and C array, `CMakeLists.txt`, and component and operator
-`Kconfig` fragments. Run it again after changing `model/model.py` or the MLOps
-settings. The application's `CMakeLists.txt` adds `ai_layer` before
-`find_package(Zephyr)`, so the generated files enter the next build. Build
-the `DevKit-E8` target with the `CMSIS Solution` extension after generating the
-AI layer.
+Build the `DevKit-E8` target with the `CMSIS Solution` extension using the
+existing `ai_layer`. The external module does not provide a `west ailayer`
+command. Do not regenerate the layer as part of this setup; updating
+`create_ai_layer` is a separate follow-up.
 
 ## 4. Alif E8 application
 
@@ -277,7 +249,8 @@ stream version, and custom DMA setting. It then releases the driver and
 calls `executorch_run_test()` through its C interface.
 
 `src/executorch_test.cpp` loads the model embedded in `ai_layer/model_pte.c`
-with `EmbeddedModule`, supplies a deterministic 16x16 RGB float ramp, and runs
+with the application-local `EmbeddedModule` in `src/arm_embedded_module.cpp`,
+supplies a deterministic 16x16 RGB float ramp, and runs
 `forward()`. Input shape and dimension order come from model metadata. The
 Ethos-U backend executes delegated work through Zephyr's initialized
 driver. The runner prints ten float logits and `Test_result: PASS` or
@@ -285,12 +258,13 @@ driver. The runner prints ten float logits and `Test_result: PASS` or
 logits with a numerical reference.
 
 `ai_layer/components.conf` enables the CMSIS-ExecuTorch runtime and Ethos-U
-backend while disabling the upstream runtime build. `ai_layer/operators.conf`
+backend from the external pack. `ai_layer/operators.conf`
 selects the operators needed by the model. The generated
 `ai_layer/CMakeLists.txt` merges both fragments with `prj.conf` and links the
 embedded model into the application. The current model targets
-`ethos-u85-256`; regenerate the layer when replacing it so its C array and
-operator selections stay in sync.
+`ethos-u85-256`. Keep its C array and operator selections together when the
+AI layer creation workflow is updated. The application sets `ET_LOG_ENABLED=0`
+for the pack runtime and its own sources in `CMakeLists.txt`.
 
 The method allocator uses a 128 KiB pool in default RAM. A 64 KiB temporary
 pool is placed in devicetree `SRAM0` so NPU scratch uses system SRAM instead of

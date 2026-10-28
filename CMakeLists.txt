@@ -15,5 +15,9 @@ project(my_app)
 
 target_sources(app PRIVATE
   src/main.c
+  src/arm_embedded_module.cpp
   src/executorch_test.cpp
 )
+
+# Keep runtime logging consistent with the existing AI layer configuration.
+zephyr_compile_definitions(ET_LOG_ENABLED=0)
