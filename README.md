@@ -153,21 +153,17 @@ again.
 
 ## 2. Use the external CMSIS-ExecuTorch pack
 
-This application uses the self-contained Zephyr module in:
-
-~~~text
-C:/Users/chrfav01/benchresults/executorch_matthias/pack-output/PyTorch.ExecuTorch.1.6.0
-~~~
+This application uses the self-contained Zephyr module from the
+`PyTorch::ExecuTorch@1.6.0-zephyrpreview1` CMSIS pack declared in `zephyr.csolution.yml`.
 
 The pack supplies `zephyr/module.yml` with the module name `cmsis-executorch`,
 plus the runtime, operators, headers, and FlatBuffers headers. Neither
 `executorch` nor `cmsis-executorch` is a west project. Existing checkouts in
 `modules/lib` are not used by this application.
 
-Set the pack root through `EXTRA_ZEPHYR_MODULES` in
-[`zephyr.csolution.yml`](zephyr.csolution.yml), as shown below. Adjust that
-path if the pack is moved. No separate ExecuTorch checkout or Python export
-setup is needed to build the existing model.
+`EXTRA_ZEPHYR_MODULES` in [`zephyr.csolution.yml`](zephyr.csolution.yml) uses
+the pack selected by the solution. No separate ExecuTorch checkout or Python
+export setup is needed to build the existing model.
 
 ## 3. Configure the CMSIS solution for `west`
 
@@ -179,6 +175,9 @@ solution:
 
 ~~~yaml
 solution:
+  packs:
+    - pack: AlifSemiconductor::Ensemble@^2.2.0-0
+    - pack: PyTorch::ExecuTorch@1.6.0-zephyrpreview1
   target-types:
     - type: DevKit-E8
       board: DevKit-E8
@@ -201,12 +200,16 @@ solution:
         board: $west-board$
         west-defs:
           - DTC_OVERLAY_FILE: app.overlay
-          - EXTRA_ZEPHYR_MODULES: ${SOLUTION_ROOT}/../../../executorch_matthias/pack-output/PyTorch.ExecuTorch.1.6.0
+          - EXTRA_ZEPHYR_MODULES: ${CMSIS_PACK_ROOT}/PyTorch/ExecuTorch/1.6.0-zephyrpreview1
 ~~~
 
 `west-defs` passes these `Kconfig` and `CMake` values into the `west` build.
-`${SOLUTION_ROOT}` resolves the pack path in the generated CMake and avoids a
-literal Windows drive colon, which the `west-defs` schema does not accept.
+The generated CMake expands `${CMSIS_PACK_ROOT}` to the configured pack
+repository. Keep the version in `EXTRA_ZEPHYR_MODULES` aligned with the
+`packs:` entry. CMSIS `$Pack(...)$` access sequences and custom variables are
+passed through literally in this `west-defs` flow; use CMake variable syntax
+here. This also keeps drive-letter colons out of the YAML value, as required
+by its schema.
 `project-id` also identifies the image context in the target set. Keep the
 checked-in solution's pack, debugger, image, MLOps, and compiler entries for
 this Alif E8 example.
@@ -233,8 +236,21 @@ file shows the expected format; setup refreshes it for your installed tools.
 
 Build the `DevKit-E8` target with the `CMSIS Solution` extension using the
 existing `ai_layer`. The external module does not provide a `west ailayer`
-command. Do not regenerate the layer as part of this setup; updating
-`create_ai_layer` is a separate follow-up.
+command. To regenerate the layer after setting up the export environment
+with `setup_venv.py`, run from the application root:
+
+~~~bash
+python create_ai_layer.py
+~~~
+
+The script discovers the root `*.cbuild-mlops.yml` file and defaults to Zephyr.
+Pass a path explicitly when there are multiple MLOps files. To generate a
+CMSIS layer instead, use `python create_ai_layer.py --backend cmsis`
+(`--mode cmsis` is also accepted). Both backends read operator registration
+from the installed pack version in the adjacent `*.cbuild-pack.yml` lock file.
+The pack location follows `CMSIS_PACK_ROOT`, or the standard CMSIS pack cache
+when it is unset. Run solution setup after changing pack requirements so the
+lock file matches the solution.
 
 ## 4. Alif E8 application
 
@@ -263,7 +279,7 @@ selects the operators needed by the model. The generated
 `ai_layer/CMakeLists.txt` merges both fragments with `prj.conf` and links the
 embedded model into the application. The current model targets
 `ethos-u85-256`. Keep its C array and operator selections together when the
-AI layer creation workflow is updated. The application sets `ET_LOG_ENABLED=0`
+model is regenerated. The application sets `ET_LOG_ENABLED=0`
 for the pack runtime and its own sources in `CMakeLists.txt`.
 
 The method allocator uses a 128 KiB pool in default RAM. A 64 KiB temporary

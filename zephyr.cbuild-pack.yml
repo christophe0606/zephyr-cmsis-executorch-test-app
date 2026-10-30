@@ -3,3 +3,9 @@ cbuild-pack:
     - resolved-pack: AlifSemiconductor::Ensemble@2.2.1
       selected-by-pack:
         - AlifSemiconductor::Ensemble@^2.2.0-0
+    - resolved-pack: PyTorch::ExecuTorch@1.6.0-zephyrpreview1
+      selected-by-pack:
+        - PyTorch::ExecuTorch@1.6.0-zephyrpreview1
+    - resolved-pack: PyTorch::ExecuTorch@1.6.0
+      selected-by-pack:
+        - PyTorch::ExecuTorch@1.6.0

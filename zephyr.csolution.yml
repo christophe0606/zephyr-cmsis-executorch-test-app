@@ -4,6 +4,7 @@ solution:
   # List the packs that define the device and/or board.
   packs:
     - pack: AlifSemiconductor::Ensemble@^2.2.0-0
+    - pack: PyTorch::ExecuTorch@1.6.0-zephyrpreview1
 
   # List different hardware targets that are used to deploy the solution.
   target-types:
@@ -48,7 +49,7 @@ solution:
         board: $west-board$
         west-defs:
           - DTC_OVERLAY_FILE: app.overlay
-          - EXTRA_ZEPHYR_MODULES: ${SOLUTION_ROOT}/../../../executorch_matthias/pack-output/PyTorch.ExecuTorch.1.6.0
+          - EXTRA_ZEPHYR_MODULES: ${CMSIS_PACK_ROOT}/PyTorch/ExecuTorch/1.6.0-zephyrpreview1
 
   mlops:
     description: Ethos-U85 network demos and benchmarks for Alif DevKit-E8
@@ -60,4 +61,4 @@ solution:
       memory: Shared_Sram
 
   compiler: GCC
-  created-for: CMSIS-Toolbox@2.14.1
+  created-for: CMSIS-Toolbox@2.15.0
